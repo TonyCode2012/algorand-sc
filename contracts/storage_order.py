@@ -1,142 +1,244 @@
-from beaker import Application, GlobalStateValue, Authorize
+from beaker import Application, GlobalStateValue, Authorize, BuildOptions
 from beaker.lib.storage import BoxMapping, BoxList
 import pyteal as pt
+from beaker.consts import (
+    ASSET_MIN_BALANCE,
+    BOX_BYTE_MIN_BALANCE,
+    BOX_FLAT_MIN_BALANCE,
+    FALSE,
+)
+from algosdk.encoding import decode_address, encode_address
+import algosdk
+import base64
 
 class StorageOrderState:
     base_price = GlobalStateValue(
         stack_type=pt.TealType.uint64,
-        desr="Storage order base price per file"
+        descr="Storage order base price per file"
     )
     byte_price = GlobalStateValue(
         stack_type=pt.TealType.uint64,
-        desr="Storage order byte price"
+        descr="Storage order byte price"
     )
     size_limit = GlobalStateValue(
         stack_type=pt.TealType.uint64,
-        desr="File size limit"
+        descr="File size limit"
     )
     service_rate = GlobalStateValue(
         stack_type=pt.TealType.uint64,
-        desr="Service rate for the real place order node"
+        descr="Service rate for the real place order node"
     )
     node_num = GlobalStateValue(
         stack_type=pt.TealType.uint64,
-        desr="Order node number"
+        default=pt.Int(0),
+        descr="Order node number"
     )
-    node_array=BoxList(pt.abi.Address, 30)
-    nodes=BoxMapping(pt.abi.Address, pt.TealType.uint64)
+    nodes=BoxList(pt.abi.Address, 10)
+    node_map=BoxMapping(pt.abi.Address, pt.abi.Uint64)
+    minimum_balance=pt.Int(0)
+
+    def __init__(self):
+        self.minimum_balance = pt.Int(
+            (
+                BOX_FLAT_MIN_BALANCE
+                + (pt.abi.size_of(pt.abi.Uint64) * BOX_BYTE_MIN_BALANCE)
+                + (pt.abi.size_of(pt.abi.Address) * BOX_BYTE_MIN_BALANCE)
+            )
+            + (
+                BOX_FLAT_MIN_BALANCE
+                + (self.nodes.box_size.value * BOX_BYTE_MIN_BALANCE)
+            )
+        )
+
+app = Application(
+    "StorageOrder",
+    descr="This is storage order contract used to place order",
+    state=StorageOrderState(),
+    #build_options=BuildOptions(scratch_slots=False),
+)
 
 def storage_order_blueprint(app: Application) -> None:
     @app.external(authorize=Authorize.only_creator())
+    def bootstrap(
+        seed: pt.abi.PaymentTransaction,
+        base_price: pt.abi.Uint64,
+        byte_price: pt.abi.Uint64,
+        size_limit: pt.abi.Uint64,
+        service_rate: pt.abi.Uint64
+    ) -> pt.Expr:
+        return pt.Seq(
+	    pt.Assert(
+                seed.get().receiver() == pt.Global.current_application_address(),
+                comment="payment must be to app address",
+            ),
+            pt.Assert(
+                seed.get().amount() >= app.state.minimum_balance,
+                comment=f"payment must be for >= {app.state.minimum_balance.value}",
+            ),
+            pt.Pop(app.state.nodes.create()),
+            app.state.base_price.set(base_price.get()),
+            app.state.byte_price.set(byte_price.get()),
+            app.state.size_limit.set(size_limit.get()),
+            app.state.service_rate.set(service_rate.get()),
+        )
+
+    @app.external(authorize=Authorize.only_creator())
     def set_base_price(price: pt.abi.Uint64) -> pt.Expr:
-        return app.state.base_price.set(price)
+        return app.state.base_price.set(price.get())
 
     @app.external(authorize=Authorize.only_creator())
     def set_byte_price(price: pt.abi.Uint64) -> pt.Expr:
-        return app.state.byte_price.set(price)
+        return app.state.byte_price.set(price.get())
 
     @app.external(authorize=Authorize.only_creator())
     def set_size_limit(size: pt.abi.Uint64) -> pt.Expr:
-        return app.state.size_limit.set(size)
+        return app.state.size_limit.set(size.get())
 
     @app.external(authorize=Authorize.only_creator())
     def set_service_rate(rate: pt.abi.Uint64) -> pt.Expr:
-        return app.state.service_rate.set(rate)
-
-    @app.external(authorize=Authorize.only_creator())
-    def set_all_state(base_price: pt.abi.Uint64, byte_price: pt.abi.Uint64, size_limit: pt.abi.Uint64, service_rate: pt.abi.Uint64) -> pt.Expr:
-        return pt.Seq(
-            app.state.base_price.set(base_price),
-            app.state.byte_price.set(byte_price),
-            app.state.size_limit.set(size_limit),
-            app.state.service_rate.set(service_rate),
-        )
+        return app.state.service_rate.set(rate.get())
 
     @app.external(authorize=Authorize.only_creator())
     def add_order_node(address: pt.abi.Address) -> pt.Expr:
         return pt.Seq(
             pt.Assert(
-                app.state.node_num < pt.Int(30),
-                comment=f"Order node number has exceeded limit:{pt.Int(30)}",
-            )
+                app.state.node_num < app.state.nodes.elements,
+                comment=f"order node number has exceeded limit:{app.state.nodes.elements}",
+            ),
             pt.Assert(
-                !app.state.nodes[address].exists(),
+                pt.Not(app.state.node_map[address].exists()),
                 comment=f"{address} has been added",
             ),
-            app.state.nodes[address].set(app.state.node_num),
-            app.state.node_array[node_num].set(address),
+            (node_num := pt.abi.Uint64()).set(app.state.node_num),
+            app.state.node_map[address].set(node_num),
+            app.state.nodes[app.state.node_num].set(address),
             app.state.node_num.set(app.state.node_num + pt.Int(1)),
         )
 
     @app.external(authorize=Authorize.only_creator())
     def remove_order_node(address: pt.abi.Address) -> pt.Expr:
+        last_address=pt.abi.Address()
+        deleted_position=pt.abi.Uint64()
         return pt.Seq(
             pt.Assert(
                 app.state.node_num > pt.Int(0),
-                comment="No node to remove",
+                comment="no node to remove",
             ),
             pt.Assert(
-                app.state.nodes[address].exists(),
+                app.state.node_map[address].exists(),
                 comment=f"{address} not exist",
             ),
-            If(app.state.node_num.box_size == pt.Int(1))
+            pt.If(app.state.node_num == pt.Int(1))
             .Then(app.state.node_num.set(pt.Int(0)))
             .Else(
                 pt.Seq(
-                    last_address=ScratchVar(pt.abi.Address),
-                    deleted_position=ScratchVar(pt.TealType.uint64),
-                    last_address.store(app.state.nodes[app.state.node_num - pt.Int(1)]),
-                    deleted_position.store(app.state.nodes[address].get()),
+                    app.state.nodes[app.state.node_num - pt.Int(1)].store_into(last_address),
+                    app.state.node_map[address].store_into(deleted_position),
                     # Replace deleted position with the last element
-                    app.state.node_array[deleted_position.load()].set(last_address.load()),
+                    app.state.nodes[deleted_position.get()].set(last_address),
                     # Update the last element's position to the deleted one's
-                    app.state.nodes[last_address.load()].set(deleted_position.load()),
+                    app.state.node_map[last_address.get()].set(deleted_position),
                     app.state.node_num.set(app.state.node_num - pt.Int(1)),
                 )
             ),
-            app.state.nodes[address].delete(),
+            pt.Pop(app.state.node_map[address].delete())
         )
 
-    @app.external
-    def get_price(size: pt.abi.Uint64, is_permanent: pt.abi.Bool, *, output: pt.abi.Uint64) -> pt.Expr:
-        price = ScratchVar(pt.TealType.uint64)
-        price.store((app.state.base_price + size.get() * app.state.byte_price / pt.Int(1024) / pt.Int(1024)) * (app.state.service_rate + pt.Int(100)) / pt.Int(100))
-        return pt.Seq(
-            If(is_permanent.get())
-            .Then(output.set(price.load() * 200))
-            .Else(output.set(price.load()))
-        )
-
-    @app.external
-    def place_order(cid: pt.abi.String, size: pt.abi.Uint64, is_permanent: pt.abi.Bool) -> pt.Expr:
-        node = ScratchVar(pt.abi.Address)
-        price = ScratchVar(pt.abi.Uint64)
+    @app.external(read_only=True)
+    def get_random_order_node(*, output: pt.abi.Address) -> pt.Expr:
         return pt.Seq(
             pt.Assert(
-                app.state.node_num > 0,
-                comment="No node to order",
+                app.state.node_num > pt.Int(0),
+                comment="no node to order",
+            ),
+            output.set(app.state.nodes[pt.Global.round() % app.state.node_num].get()),
+        )
+
+    @app.external(read_only=True)
+    def get_price(
+        size: pt.abi.Uint64,
+        is_permanent: pt.abi.Bool,
+        *,
+        output: pt.abi.Uint64
+    ) -> pt.Expr:
+        return output.set(_get_price(size, is_permanent))
+
+    @app.external
+    def place_order(
+        seed: pt.abi.PaymentTransaction,
+        merchant: pt.abi.Account,
+        cid: pt.abi.String,
+        size: pt.abi.Uint64,
+        is_permanent: pt.abi.Bool
+    ) -> pt.Expr:
+        price = pt.ScratchVar(pt.TealType.uint64)
+        return pt.Seq(
+            pt.Assert(
+                seed.get().receiver() == pt.Global.current_application_address(),
+                comment="payment must be to app address",
+            ),
+            pt.Assert(
+                app.state.node_num > pt.Int(0),
+                comment="no node to order",
+            ),
+            pt.Assert(
+                app.state.node_map[merchant.address()].exists(),
+                comment=f"{merchant.address()} is not an order node",
             ),
             pt.Assert(
                 size.get() <= app.state.size_limit,
-                comment=f"Given file size:{size.get()} exceeds size limit:{app.state.size_limit}"
+                comment=f"given file size:{size.get()} exceeds size limit:{app.state.size_limit}"
             ),
-            price.store(self.get_price(size, is_permanent)),
+            price.store(_get_price(size, is_permanent)),
             pt.Assert(
-                price < pt.Balance(pt.Txn.sender()),
-                comment="Insufficient balance to place order",
+                seed.get().amount() >= price.load(),
+                comment=f"payment must be for >= {app.state.minimum_balance.value}",
             ),
-            node.store(pt.state.node_array[pt.Global.round() % app.state.node_num]),
+            # Pay to merchant
             pt.InnerTxnBuilder.Execute(
                 {
                     pt.TxnField.type_enum: pt.TxnType.Payment,
-                    pt.TxnField.amount: price,
-                    pt.TxnField.receiver: node.load(),
-                    pt.TxnField.sender: pt.Txn.sender(),
-                    pt.TxnField.fee: pt.Int(0),
+                    pt.TxnField.amount: price.load(),
+                    pt.TxnField.receiver: merchant.address(),
                 }
             ),
-            pt.Log(f"\{'customer':{pt.Txn.sender()},'merchant':{node.load()},'cid':{cid.get()},'size':{size.get()},'price':{price.load()},'is_permanent':{isPermanent.get()}\}"),
+            # Refund exceeded fee to customer
+            pt.If(seed.get().amount() - price.load() > pt.Int(0))
+            .Then(
+                pt.InnerTxnBuilder.Execute(
+                    {
+                        pt.TxnField.type_enum: pt.TxnType.Payment,
+                        pt.TxnField.amount: seed.get().amount() - price.load(),
+                        pt.TxnField.sender: pt.Txn.sender(),
+                    }
+                )
+            ),
+            (address := pt.abi.String()).set(merchant.address()),
+            pt.Log(
+                pt.Concat(
+                    pt.Bytes("$customer$"),pt.Txn.sender(),pt.Bytes("$customer_end$"),
+                    pt.Bytes("$merchant$"),merchant.address(),pt.Bytes("$merchant_end$"),
+                    pt.Bytes("$cid$"),cid.get(),pt.Bytes("$cid_end$"),
+                    pt.Bytes("$size$"),pt.Itob(size.get()),pt.Bytes("$size_end$"),
+                    pt.Bytes("$price$"),pt.Itob(price.load()),pt.Bytes("$price_end$"),
+                    pt.Bytes("$is_permanent$"),pt.Itob(is_permanent.get()),pt.Bytes("$is_permanent_end$"),
+                )
+            ),
         )
 
-app = Application("StorageOrder", desr="This is storage order contract used to place order", state=StorageOrderState)
+    def _get_price(
+        size: pt.abi.Uint64,
+        is_permanent: pt.abi.Bool
+    ) -> pt.TealType.uint64:
+        price = pt.ScratchVar(pt.TealType.uint64)
+        return pt.Seq(
+            price.store((app.state.base_price + size.get() * app.state.byte_price / pt.Int(1024) / pt.Int(1024)) * (app.state.service_rate + pt.Int(100)) / pt.Int(100)),
+            pt.If(is_permanent.get())
+            .Then(price.load() * pt.Int(200))
+            .Else(price.load())
+        )
+
 app.apply(storage_order_blueprint)
+
+app.build().export("./artifacts")
+print("Build smart contract successfully")
