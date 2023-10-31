@@ -28,6 +28,10 @@ class StorageOrderState:
         stack_type=pt.TealType.uint64,
         descr="Service rate for the real place order node"
     )
+    algo_cru_rate = GlobalStateValue(
+        stack_type=pt.TealType.uint64,
+        descr="ALGO to CRU exchange rate"
+    )
     node_num = GlobalStateValue(
         stack_type=pt.TealType.uint64,
         default=pt.Int(0),
@@ -64,7 +68,8 @@ def storage_order_blueprint(app: Application) -> None:
         base_price: pt.abi.Uint64,
         byte_price: pt.abi.Uint64,
         size_limit: pt.abi.Uint64,
-        service_rate: pt.abi.Uint64
+        service_rate: pt.abi.Uint64,
+        algo_cru_rate: pt.abi.Uint64
     ) -> pt.Expr:
         return pt.Seq(
 	    pt.Assert(
@@ -80,6 +85,7 @@ def storage_order_blueprint(app: Application) -> None:
             app.state.byte_price.set(byte_price.get()),
             app.state.size_limit.set(size_limit.get()),
             app.state.service_rate.set(service_rate.get()),
+            app.state.algo_cru_rate.set(algo_cru_rate.get()),
         )
 
     @app.external(authorize=Authorize.only_creator())
@@ -97,6 +103,10 @@ def storage_order_blueprint(app: Application) -> None:
     @app.external(authorize=Authorize.only_creator())
     def set_service_rate(rate: pt.abi.Uint64) -> pt.Expr:
         return app.state.service_rate.set(rate.get())
+
+    @app.external(authorize=Authorize.only_creator())
+    def set_algo_cru_rate(rate: pt.abi.Uint64) -> pt.Expr:
+        return app.state.algo_cru_rate.set(rate.get())
 
     @app.external(authorize=Authorize.only_creator())
     def add_order_node(address: pt.abi.Address) -> pt.Expr:
@@ -232,7 +242,9 @@ def storage_order_blueprint(app: Application) -> None:
     ) -> pt.TealType.uint64:
         price = pt.ScratchVar(pt.TealType.uint64)
         return pt.Seq(
-            price.store((app.state.base_price + size.get() * app.state.byte_price / pt.Int(1024) / pt.Int(1024)) * (app.state.service_rate + pt.Int(100)) / pt.Int(100)),
+            price.store(
+                (app.state.base_price + size.get() * app.state.byte_price / pt.Int(1024) / pt.Int(1024)) * (app.state.service_rate + pt.Int(100)) / pt.Int(100) / app.state.algo_cru_rate
+            ),
             pt.If(is_permanent.get())
             .Then(price.load() * pt.Int(200))
             .Else(price.load())
