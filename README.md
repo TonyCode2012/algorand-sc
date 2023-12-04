@@ -11,7 +11,7 @@ Crust network is an incentive layer built on IPFS network. It completes [GPOS](h
 ### IPFS gateway
 
 Before using storage order smart contract, make sure you have an IPFS gateway. You can start one on local referring to [this doc](https://docs.ipfs.tech/install/ipfs-desktop/),
-or using [public gateways](https://docs.ipfs.tech/concepts/ipfs-gateway/#gateway-providers) or [those](https://github.com/crustio/crust-apps/blob/041258d0aca109a8d5e24cdade0be351c3e57f73/packages/apps-config/src/ipfs-gateway-endpoints/index.ts) maintained by Crust network. You can upload file you want to store to IPFS gateway and get a cid(content id) which represents uploaded file and its size. With these two parameters you can place order on Crust network. Here is an [example](https://wiki.crust.network/docs/en/buildFileStoringWithGWDemo) about how to upload file to Crust IPFS gateway. For more information about IPFS, check this [doc](https://docs.ipfs.tech/).
+or using [public gateways](https://docs.ipfs.tech/concepts/ipfs-gateway/#gateway-providers) or [those](https://github.com/crustio/crust-apps/blob/041258d0aca109a8d5e24cdade0be351c3e57f73/packages/apps-config/src/ipfs-gateway-endpoints/index.ts) maintained by Crust network. You can upload file you want to store to IPFS gateway, it returns a cid(content id) which represents the file and the file size(**Note**: this size stands for the real file size stored on IPFS network, place order with this size rather than the one the file looks like on disk). With these two parameters you can place order on Crust network. Here is an [example](https://wiki.crust.network/docs/en/buildFileStoringWithGWDemo) about how to upload file to Crust IPFS gateway. For more information about IPFS, check this [doc](https://docs.ipfs.tech/).
 
 ### Deployment
 
@@ -33,7 +33,7 @@ Functions for contract owner:
 
 Functions for users:
 1. **get_price**: Get price in ALGO for file size specified by parameter "size" and for storing permanently or not by parameter "is_permanent".
-1. **place_order**: Place order with cid, size and is_permanent in ALGO, payment transaction indicates the price user should pay for merchant node.
+1. **place_order**: Place order with cid, size and is_permanent with ALGO, payment transaction indicates the price that user should pay for merchant node.
 
 python examples:
 ```shell
@@ -62,7 +62,7 @@ Functions for contract owner:
 1. **set_bucket_edition**: Set bucket edition with id, capacity and max supply number.
 1. **set_bucket_edition_prices**: Set bucket edition price which seems like '[(10,100)]'(10 indicates asset id and 100 is the price).
 1. **disable_bucket_edition**: Disable indicated bucket edition.
-1. **ensable_bucket_edition**: Enable indicated bucket edition.
+1. **enable_bucket_edition**: Enable indicated bucket edition.
 
 Functions for users:
 1. **get_bucket_edition_ids**: Get all bucket edition ids.
@@ -70,7 +70,7 @@ Functions for users:
 1. **is_active_bucket_edition**: Check if indicated bucket edition is active.
 1. **get_bucket_edition_prices**: Get indicated bucket edition prices.
 1. **mint**: Mint a bucket with producing a NFT token waiting for claiming.
-1. **claim**: Claim minted bucket NFT token.
+1. **claim**: Claim minted bucket NFT token, only the account who minted this NFT otken can claim.
 
 python examples:
 ```shell
