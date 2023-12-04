@@ -2,7 +2,7 @@
 
 ## Storage order smart contract
 
-Storage order contract allows users to place a storage order on Algorand. Crust storage order [listener](https://github.com/crustio/storage-contract-node) will monitor the order event and place order on Crust network.
+Storage order contract allows users to place storage order on Algorand. Crust storage order [listener](https://github.com/crustio/storage-contract-node) will monitor the order event and place order on Crust network.
 
 ### Crust network
 
@@ -68,8 +68,8 @@ Functions for contract owner:
 
 Functions for users:
 1. **get_bucket_edition_ids**: Get all bucket edition ids.
-1. **get_bucket_edition**: Get indicated bucket edition with edition id.
-1. **is_active_bucket_edition**: Get indicated bucket edition.
+1. **get_bucket_edition**: Get indicated bucket edition.
+1. **is_active_bucket_edition**: Check if indicated bucket edition is active.
 1. **get_bucket_edition_prices**: Get indicated bucket edition prices.
 1. **mint**: Mint a bucket with producing a NFT token waiting for claiming.
 1. **claim**: Claim minted bucket NFT token.
