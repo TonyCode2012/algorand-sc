@@ -70,7 +70,7 @@ Functions for users:
 1. **is_active_bucket_edition**: Check if indicated bucket edition is active.
 1. **get_bucket_edition_prices**: Get indicated bucket edition prices.
 1. **mint**: Mint a bucket with producing a NFT token waiting for claiming.
-1. **claim**: Claim minted bucket NFT token, only the account who minted this NFT otken can claim.
+1. **claim**: Claim minted bucket NFT token, only the account who minted this NFT token can claim.
 
 python examples:
 ```shell
