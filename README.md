@@ -6,12 +6,12 @@ Storage order contract allows users to place storage order on Algorand. Crust st
 
 ### Crust network
 
-Crust network is an incentive layer built on IPFS network. It completes [GOPS](https://wiki.crust.network/docs/en/crustOverview#gpos) and [MPOW](https://wiki.crust.network/docs/en/crustOverview#mpow) mechanisms to build a decentralized storage market([DSM](https://wiki.crust.network/docs/en/crustOverview#dsm)). For more information about Crust network, check this [doc](https://wiki.crust.network/en)
+Crust network is an incentive layer built on IPFS network. It completes [GPOS](https://wiki.crust.network/docs/en/crustOverview#gpos) and [MPOW](https://wiki.crust.network/docs/en/crustOverview#mpow) mechanisms to build a decentralized storage market([DSM](https://wiki.crust.network/docs/en/crustOverview#dsm)). For more information about Crust network, check this [doc](https://wiki.crust.network/en)
 
 ### IPFS gateway
 
 Before using storage order smart contract, make sure you have an IPFS gateway. You can start one on local referring to [this doc](https://docs.ipfs.tech/install/ipfs-desktop/),
-or using [public gateways](https://docs.ipfs.tech/concepts/ipfs-gateway/#gateway-providers) or [those](https://github.com/crustio/crust-apps/blob/041258d0aca109a8d5e24cdade0be351c3e57f73/packages/apps-config/src/ipfs-gateway-endpoints/index.ts) maintained by Crust network. You can upload files you want to store to IPFS gateway and get a cid(content id) which represents uploaded file and its size. With these two parameters you can place order on Crust network. For more information about IPFS, check this [doc](https://docs.ipfs.tech/).
+or using [public gateways](https://docs.ipfs.tech/concepts/ipfs-gateway/#gateway-providers) or [those](https://github.com/crustio/crust-apps/blob/041258d0aca109a8d5e24cdade0be351c3e57f73/packages/apps-config/src/ipfs-gateway-endpoints/index.ts) maintained by Crust network. You can upload file you want to store to IPFS gateway and get a cid(content id) which represents uploaded file and its size. With these two parameters you can place order on Crust network. Here is an [example](https://wiki.crust.network/docs/en/buildFileStoringWithGWDemo) about how to upload file to Crust IPFS gateway. For more information about IPFS, check this [doc](https://docs.ipfs.tech/).
 
 ### Deployment
 
@@ -37,8 +37,6 @@ Functions for users:
 
 python examples:
 ```shell
-# Deploy storage order with predefined parameters
-./scripts/storage_order_deploy.py
 # Add merchant order node
 ./scripts/storage_order_calls.py add_order_node R52TCLVXRADTZ3X7GTFD675RPIKCE7BR4ZVS2DA6R6YXM53UUCIIZIZN7Y
 # Get order price with size:1024Bytes and permanently stored
@@ -76,8 +74,6 @@ Functions for users:
 
 python examples:
 ```shell
-# Deploy W3Bucket smart contract
-./scripts/w3bucket_deploy.py
 # Set bucket edition with id=1, capacity=100GB and max minted number=255
 ./scripts/w3bucket_calls.py set_bucket_edition 1 '(1,100,255)' 
 # Set prices of indicated bucket eidition 1,
